@@ -1,0 +1,315 @@
+/* ==========================================================================
+   MEDICAL AI SUSHRUTA - HIGH-FIDELITY DESIGN SYSTEM
+   Theme: Minimalist Light Mode • Modern Corporate Biomedical Layout
+   Gradients: Vibrant Neon Blue to Glowing Neon Green • Subtle Neon Red Alerts
+   Typography: Plus Jakarta Sans / JetBrains Mono
+   ========================================================================== */
+
+:root {
+  /* Crisp Light Mode Foundation */
+  --bg-pure: #ffffff;
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #f1f5f9;
+  --bg-glass: rgba(255, 255, 255, 0.82);
+  --bg-glass-card: rgba(255, 255, 255, 0.92);
+
+  /* Borders & Dividers */
+  --border-subtle: #e2e8f0;
+  --border-light: rgba(226, 232, 240, 0.9);
+  --border-glass: rgba(255, 255, 255, 0.8);
+  --border-neon-glow: rgba(0, 166, 255, 0.25);
+
+  /* Typography Colors */
+  --text-primary: #0a101d;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+
+  /* Neon Blue / Cyan Spectrum */
+  --neon-blue: #0066ff;
+  --neon-cyan: #00d2ff;
+  --neon-blue-light: #e0f2fe;
+  --neon-blue-glow: 0 0 24px rgba(0, 102, 255, 0.35);
+
+  /* Glowing Neon Green Spectrum */
+  --neon-green: #00e599;
+  --neon-green-glow: 0 0 24px rgba(0, 229, 153, 0.38);
+  --neon-emerald: #059669;
+  --neon-green-light: #ecfdf5;
+
+  /* Vibrant Dual Neon Gradients for Primary CTAs */
+  --grad-neon-cta: linear-gradient(135deg, #0066ff 0%, #00d2ff 45%, #00e599 100%);
+  --grad-neon-hover: linear-gradient(135deg, #0052cc 0%, #00bfff 45%, #00cc88 100%);
+  --grad-cyan-blue: linear-gradient(135deg, #00d2ff 0%, #0066ff 100%);
+  --grad-text-neon: linear-gradient(135deg, #0052cc 0%, #0099ff 50%, #00b074 100%);
+
+  /* Subtle Neon Red Highlights for System Alerts */
+  --neon-red: #ff2a5f;
+  --neon-red-subtle: rgba(255, 42, 95, 0.06);
+  --neon-red-border: rgba(255, 42, 95, 0.3);
+  --neon-red-glow: 0 0 18px rgba(255, 42, 95, 0.22);
+  --neon-red-badge: #ffe4e9;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 12px 36px -4px rgba(15, 23, 42, 0.08);
+  --shadow-glass: 0 20px 45px -10px rgba(0, 70, 160, 0.07);
+  --shadow-cta: 0 10px 28px -4px rgba(0, 102, 255, 0.35);
+
+  /* Transitions */
+  --transition-smooth: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Base Reset & Core Typography */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-pure);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg-pure);
+  background-image: 
+    radial-gradient(at 10% 10%, rgba(0, 102, 255, 0.035) 0px, transparent 50%),
+    radial-gradient(at 90% 15%, rgba(0, 229, 153, 0.035) 0px, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(0, 210, 255, 0.03) 0px, transparent 60%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* Monospace font utility for metrics and clinical IDs */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Layout Utilities */
+.container {
+  width: 100%;
+  max-width: 1260px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* Translucent Glassmorphism Cards */
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  box-shadow: var(--shadow-glass);
+  transition: var(--transition-smooth);
+}
+
+.glass-panel:hover {
+  border-color: rgba(0, 102, 255, 0.25);
+  box-shadow: 0 24px 50px -10px rgba(0, 102, 255, 0.12);
+}
+
+.glass-card-elevated {
+  background: var(--bg-glass-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Gradient Typography */
+.text-neon-gradient {
+  background: var(--grad-text-neon);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+}
+
+/* Primary Call to Action Button: Vibrant Neon Blue to Glowing Neon Green */
+.btn-neon-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--grad-neon-cta);
+  color: #ffffff !important;
+  font-weight: 600;
+  font-size: 0.96rem;
+  letter-spacing: -0.01em;
+  padding: 13px 28px;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--shadow-cta);
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.btn-neon-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--grad-neon-hover);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+
+.btn-neon-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px -2px rgba(0, 102, 255, 0.45), 0 0 25px rgba(0, 229, 153, 0.4);
+}
+
+.btn-neon-cta:hover::after {
+  opacity: 1;
+}
+
+.btn-neon-cta:active {
+  transform: translateY(0);
+}
+
+/* Secondary Translucent Glass Button */
+.btn-glass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.94rem;
+  padding: 13px 26px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  text-decoration: none;
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-smooth);
+}
+
+.btn-glass:hover {
+  background: #ffffff;
+  border-color: var(--neon-cyan);
+  color: var(--neon-blue);
+  box-shadow: 0 6px 20px -2px rgba(0, 150, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Subtle Neon Red Alert Component */
+.alert-neon-red {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--neon-red-subtle);
+  border: 1px solid var(--neon-red-border);
+  box-shadow: var(--neon-red-glow);
+  color: #b91c1c;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: var(--transition-smooth);
+}
+
+.alert-neon-red .alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--neon-red);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 9999px;
+}
+
+.pulse-beacon-red {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--neon-red);
+  box-shadow: 0 0 10px var(--neon-red);
+  animation: pulseBeacon 2s infinite;
+}
+
+.pulse-beacon-green {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--neon-green);
+  box-shadow: 0 0 10px var(--neon-green);
+  animation: pulseBeacon 2s infinite;
+}
+
+@keyframes pulseBeacon {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* High-Tech Medical Badges */
+.badge-neon-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 102, 255, 0.2);
+  color: var(--neon-blue);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgba(0, 102, 255, 0.08);
+}
+
+/* Feature Icon Shell */
+.icon-neon-shell {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(0, 102, 255, 0.08) 0%, rgba(0, 229, 153, 0.12) 100%);
+  border: 1px solid rgba(0, 102, 255, 0.15);
+  color: var(--neon-blue);
+  transition: var(--transition-smooth);
+}
+
+.glass-panel:hover .icon-neon-shell {
+  background: var(--grad-neon-cta);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(0, 102, 255, 0.25);
+  transform: scale(1.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
