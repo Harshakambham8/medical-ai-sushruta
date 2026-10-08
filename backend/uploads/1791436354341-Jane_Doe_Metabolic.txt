@@ -1,0 +1,15 @@
+
+METABOLIC PANEL
+Patient: Jane Doe
+Date: 2026-10-08
+
+Postprandial Blood Sugar: 215 mg/dL
+Blood Urea Nitrogen: 24.5 mg/dL
+eGFR: 52 mL/min
+Serum Uric Acid: 8.1 mg/dL
+Serum Potassium: 5.6 mEq/L
+Serum Sodium: 138 mEq/L
+Total Bilirubin: 1.9 mg/dL
+SGPT / ALT: 68 U/L
+SGOT / AST: 54 U/L
+TSH: 7.2 uIU/mL

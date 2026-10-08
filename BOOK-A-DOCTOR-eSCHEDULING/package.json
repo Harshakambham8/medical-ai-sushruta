@@ -1,0 +1,17 @@
+{
+  "name": "book-a-doctor-platform",
+  "version": "1.0.0",
+  "description": "Full-stack BOOK A DOCTOR-eSCHEDULING platform",
+  "scripts": {
+    "install-server": "npm install --prefix server",
+    "install-client": "npm install --prefix client",
+    "install-all": "npm run install-server && npm run install-client",
+    "server": "npm run dev --prefix server",
+    "client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "seed": "node server/seed.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
