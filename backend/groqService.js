@@ -211,3 +211,129 @@ function generateClinicalFallback(symptoms = [], patientNotes = "", patientProfi
   };
 }
 
+/**
+ * Interactive Clinical Chat Inference powered by Groq
+ * @param {string} userQuery
+ */
+export async function generateChatWithGroq(userQuery) {
+  const apiKey =
+    process.env.GROQ_API_KEY ||
+    "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";
+
+  if (!apiKey) return null;
+
+  const systemInstruction = `You are "Medical AI Sushruta", an advanced, compassionate, articulate, and authoritative clinical AI medical educational assistant.
+The user is asking a health, symptom, medication, or medical question.
+Provide a clear, detailed, clinically thorough, and structured response addressing the user's specific query.
+Include:
+- Clear physiological explanation of what is happening (e.g. mechanisms, reasons)
+- Common causes, contributing triggers, or conditions associated with it
+- Practical self-care, home remedies, lifestyle measures, and guidance
+- Red flags / warning signs indicating when to seek medical attention
+- Specific questions to ask their doctor
+
+Format with clear headers and bullet points. Be empathetic, clear, and reassuring. Do not output legal disclaimers at the end as one is automatically added.`;
+
+  for (const model of GROQ_MODELS) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemInstruction },
+            { role: "user", content: userQuery }
+          ],
+          temperature: 0.5,
+          max_tokens: 2048
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (content && content.trim()) {
+          return content.trim();
+        }
+      }
+    } catch (err) {
+      console.warn(`Groq chat inference attempt with ${model} failed:`, err.message);
+    }
+  }
+  return null;
+}
+
+/**
+ * Report Biomarker Extraction powered by Groq
+ * @param {string} reportText
+ */
+export async function extractBiomarkersWithGroq(reportText) {
+  const apiKey =
+    process.env.GROQ_API_KEY ||
+    "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";
+
+  if (!apiKey || !reportText) return null;
+
+  const systemPrompt = `You are Medical AI Sushruta, an expert clinical pathologist and lab diagnostic intelligence AI.
+Carefully examine this medical report text or document.
+Extract ALL actual lab test biomarkers with their exact measured numerical or qualitative values, their units, and the exact reference intervals reported.
+Evaluate the clinical status for each marker as: "Optimal", "Elevated", "Low", or "Critical".
+Evaluate overall report status as: "optimal", "attention", or "critical".
+Provide a clear 3-4 sentence clinical summary explaining the specific findings and practical questions to discuss with their physician.
+
+Return STRICT JSON ONLY (no markdown code fences, just raw JSON matching this schema):
+{
+  "status": "attention" or "optimal",
+  "summary": "Clinical interpretation of specific findings...",
+  "biomarkers": [
+    {
+      "name": "Exact Test Name",
+      "value": "Exact Number with Unit (e.g. 148 mg/dL)",
+      "ref": "Reference range (e.g. 70.0 - 99.0 mg/dL)",
+      "status": "Optimal" or "Elevated" or "Low" or "Critical"
+    }
+  ]
+}`;
+
+  for (const model of GROQ_MODELS) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Report Content:\n${reportText}` }
+          ],
+          temperature: 0.1,
+          max_tokens: 2048,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const raw = data?.choices?.[0]?.message?.content;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.biomarkers) && parsed.biomarkers.length > 0) {
+            return parsed;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`Groq report parser attempt with ${model} failed:`, err.message);
+    }
+  }
+  return null;
+}
+
+

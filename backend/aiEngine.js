@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateChatWithGroq, extractBiomarkersWithGroq } from "./groqService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +81,7 @@ Do not write a generic legal disclaimer at the end because one will be appended 
     }
   };
 
-  const modelsToTry = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.7-flash"];
+  const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
 
   for (let attempt = 0; attempt < 3; attempt++) {
     for (const model of modelsToTry) {
@@ -104,6 +105,9 @@ Do not write a generic legal disclaimer at the end because one will be appended 
               matchedKeywords: keywords.length > 0 ? keywords : ["Direct Gemini AI", "Clinical Guidance"]
             };
           }
+        } else if (response.status === 401 || response.status === 403) {
+          console.warn(`Gemini API Key unauthorized (${response.status}). Falling back to Groq.`);
+          return null;
         } else if (response.status === 503) {
           // Temporary spike in demand - brief pause then try next candidate
           await new Promise((resolve) => setTimeout(resolve, 800));
@@ -435,17 +439,31 @@ export async function processChatQuery(userMessage) {
     };
   }
 
-  // 1. Attempt Live Gemini 2.5 Flash API First
+  // 1. Attempt Live Gemini API First
   try {
     const geminiResult = await callGeminiAPI(userMessage);
     if (geminiResult && geminiResult.response) {
       return geminiResult;
     }
   } catch (err) {
-    console.warn("Gemini call bypassed, falling back to local clinical knowledge base.");
+    console.warn("Gemini call bypassed:", err.message);
   }
 
-  // 2. Check Extensive Clinical Knowledge Base (Tier 2)
+  // 2. Attempt Groq Ultra-Fast AI (qwen/qwen3.8-27b & gpt-oss-120b)
+  try {
+    const groqResponse = await generateChatWithGroq(userMessage);
+    if (groqResponse && groqResponse.trim()) {
+      const keywords = extractClinicalKeywords(userMessage + " " + groqResponse);
+      return {
+        response: groqResponse.trim() + DISCLAIMER,
+        matchedKeywords: keywords.length > 0 ? keywords : ["Groq Clinical Engine", "Medical Guidance"]
+      };
+    }
+  } catch (err) {
+    console.warn("Groq chat bypassed:", err.message);
+  }
+
+  // 3. Check Extensive Clinical Knowledge Base (Tier 2)
   const cleanQuery = userMessage.toLowerCase();
   for (const item of KNOWLEDGE_BASE) {
     for (const kw of item.keywords) {
@@ -458,7 +476,7 @@ export async function processChatQuery(userMessage) {
     }
   }
 
-  // 3. Dynamic Contextual Synthesizer (Tier 3)
+  // 4. Dynamic Contextual Synthesizer (Tier 3)
   return generateContextualResponse(userMessage);
 }
 
@@ -834,7 +852,7 @@ ${text}`;
   }
   parts.push({ text: prompt });
 
-  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+  const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
   for (const model of modelsToTry) {
     try {
       const controller = new AbortController();
@@ -872,6 +890,8 @@ ${text}`;
             return parsed;
           }
         }
+      } else if (response.status === 401 || response.status === 403) {
+        return null;
       }
     } catch (err) {
       console.warn(`Gemini report extraction notice (${model}):`, err.message);
@@ -882,11 +902,18 @@ ${text}`;
 }
 
 export async function analyzeReportContent(text, filename = "Diagnostic_Report.pdf", fileContext = {}) {
-  // 1. Try Live Gemini 3.8 Flash First
+  // 1. Try Live Gemini First
   let aiResult = null;
   try {
     aiResult = await extractBiomarkersWithGemini(text, fileContext);
   } catch { }
+
+  // 2. Try Groq Clinical Parser Second
+  if ((!aiResult || !aiResult.biomarkers || aiResult.biomarkers.length === 0) && text) {
+    try {
+      aiResult = await extractBiomarkersWithGroq(text);
+    } catch { }
+  }
 
   if (aiResult && aiResult.biomarkers && aiResult.biomarkers.length > 0) {
     return {
