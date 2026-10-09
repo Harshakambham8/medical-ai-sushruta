@@ -13,9 +13,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22.12.0
-      - key: AQ.Ab8RN6KFlsK-XG1ilL-2KIs72opLgEvPPBlpOCZZfhayleBrhA
+      - key: GEMINI_API_KEY
         sync: false
-      - key: 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
+      - key: GROQ_API_KEY
         sync: false
 
   # ============================================================
@@ -24,8 +24,6 @@ services:
   - type: web
     name: medical-ai-sushruta-frontend
     runtime: static
-    plan: free
-    region: oregon
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
@@ -36,3 +34,4 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false
+
