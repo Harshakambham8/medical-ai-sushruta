@@ -13,9 +13,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22.12.0
-      - key: GEMINI_API_KEY
+      - key: AQ.Ab8RN6KFlsK-XG1ilL-2KIs72opLgEvPPBlpOCZZfhayleBrhA
         sync: false
-      - key: GROQ_API_KEY
+      - key: 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
         sync: false
 
   # ============================================================
