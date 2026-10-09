@@ -5,8 +5,11 @@
   "description": "Medical AI Sushruta Express and SQLite Backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --watch --experimental-sqlite server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   },
   "dependencies": {
     "cors": "^2.8.5",
