@@ -12,6 +12,27 @@ import { evaluateSymptomsWithGroq } from "./groqService.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load environment variables from .env and apikey.txt
+try {
+  if (typeof process.loadEnvFile === "function") {
+    const envPath = path.join(__dirname, ".env");
+    if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
+  }
+} catch (e) {}
+
+try {
+  const rootApiKeyPath = path.join(__dirname, "..", "apikey.txt");
+  if (fs.existsSync(rootApiKeyPath)) {
+    const lines = fs.readFileSync(rootApiKeyPath, "utf-8").split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("gsk_") && !process.env.GROQ_API_KEY) {
+        process.env.GROQ_API_KEY = trimmed;
+      }
+    }
+  }
+} catch (e) {}
+
 const app = express();
 const PORT = process.env.PORT || 8000;
 
@@ -410,10 +431,12 @@ async function handleAnalyzeReport(req, res) {
       return res.status(400).json({ error: "Medical report text or document file is required" });
     }
 
-    // Run deep clinical analyzer (multimodal Gemini Flash + Precision local parser fallback)
+    // Run deep clinical analyzer (Groq AI inference + Gemini + Precision local clinical fallback)
+    const customGroqKey = req.headers["x-groq-api-key"] || req.body?.groqApiKey || null;
     const result = await analyzeReportContent(text || "", filename, {
       buffer: fileBuffer,
-      mimeType: fileMimeType
+      mimeType: fileMimeType,
+      groqApiKey: customGroqKey
     });
 
     // Save to database
@@ -446,6 +469,17 @@ async function handleAnalyzeReport(req, res) {
 app.post("/api/analyze-report", uploadFields, handleAnalyzeReport);
 app.post("/reports/upload", uploadFields, handleAnalyzeReport);
 app.post("/api/reports/upload", uploadFields, handleAnalyzeReport);
+
+// GET /api/reports — List previously analyzed reports
+app.get("/api/reports", (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 30;
+    const reports = db.prepare("SELECT * FROM reports ORDER BY created_at DESC LIMIT ?").all(limit);
+    res.json({ success: true, count: reports.length, data: reports });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ============================================================
 // GET /api/patient/download-report — Comprehensive Clinical Dossier
@@ -971,14 +1005,89 @@ app.post("/api/doctors", (req, res) => {
   }
 });
 
-// GET /api/appointments — List all booked appointments
+// GET /api/appointments — List appointments with role-aware filtering
 app.get("/api/appointments", (req, res) => {
   try {
-    const appointments = db.prepare("SELECT * FROM appointments ORDER BY date ASC, time_slot ASC").all();
+    const { doctorId, patientEmail, status, date } = req.query;
+    let query = "SELECT * FROM appointments WHERE 1=1";
+    const params = [];
+
+    if (doctorId) {
+      query += " AND doctor_id = ?";
+      params.push(doctorId);
+    }
+    if (patientEmail) {
+      query += " AND LOWER(patient_email) = LOWER(?)";
+      params.push(patientEmail.trim());
+    }
+    if (status) {
+      query += " AND status = ?";
+      params.push(status);
+    }
+    if (date) {
+      query += " AND date = ?";
+      params.push(date);
+    }
+
+    query += " ORDER BY date ASC, time_slot ASC";
+    const appointments = db.prepare(query).all(...params);
     res.json({ success: true, count: appointments.length, data: appointments });
   } catch (err) {
     console.error("Get appointments error:", err);
     res.status(500).json({ success: false, error: "Failed to retrieve appointments" });
+  }
+});
+
+// GET /api/appointments/available-slots — Calculate real-time available vs booked slots
+app.get("/api/appointments/available-slots", (req, res) => {
+  try {
+    const { doctorId, date } = req.query;
+    if (!doctorId || !date) {
+      return res.status(400).json({ success: false, error: "doctorId and date are required" });
+    }
+
+    const doctor = db.prepare("SELECT * FROM doctors WHERE id = ?").get(doctorId);
+    if (!doctor) {
+      return res.status(404).json({ success: false, error: "Doctor not found" });
+    }
+
+    let availability = [];
+    try {
+      availability = typeof doctor.availability === "string" ? JSON.parse(doctor.availability) : (doctor.availability || []);
+    } catch {}
+
+    const d = new Date(date);
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dayName = dayNames[d.getUTCDay() !== undefined ? d.getDay() : 0];
+
+    const daySchedule = availability.find((a) => (a.day || "").toLowerCase() === dayName.toLowerCase());
+    const defaultSlots = ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:00 PM"];
+    const activeSlots = daySchedule?.slots || defaultSlots;
+
+    const bookedRows = db.prepare(
+      "SELECT time_slot FROM appointments WHERE doctor_id = ? AND date = ? AND status != 'cancelled'"
+    ).all(doctorId, date);
+    const bookedSet = new Set(bookedRows.map((r) => r.time_slot));
+
+    const slotDetails = activeSlots.map((slot) => ({
+      slot,
+      isBooked: bookedSet.has(slot),
+      isOnDuty: !!daySchedule
+    }));
+
+    res.json({
+      success: true,
+      doctorId: Number(doctorId),
+      doctorName: doctor.name,
+      date,
+      dayName,
+      isOnDuty: !!daySchedule,
+      availableDays: availability.map((a) => a.day),
+      slots: slotDetails
+    });
+  } catch (err) {
+    console.error("Available slots error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1055,6 +1164,47 @@ app.patch("/api/appointments/:id/status", (req, res) => {
   } catch (err) {
     console.error("Update appointment status error:", err);
     res.status(500).json({ success: false, error: "Failed to update status" });
+  }
+});
+
+// PATCH /api/appointments/:id/notes — Doctor clinical consultation notes
+app.patch("/api/appointments/:id/notes", (req, res) => {
+  try {
+    const { notes } = req.body;
+    const existing = db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, error: "Appointment not found" });
+
+    db.prepare("UPDATE appointments SET notes = ? WHERE id = ?").run(notes || "", req.params.id);
+    const updated = db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id);
+    res.json({ success: true, message: "Clinical notes updated successfully", data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/doctors/:id/schedule — Doctor availability & fees management
+app.patch("/api/doctors/:id/schedule", (req, res) => {
+  try {
+    const { fees, availability, phone, bio } = req.body;
+    const doctor = db.prepare("SELECT * FROM doctors WHERE id = ?").get(req.params.id);
+    if (!doctor) return res.status(404).json({ success: false, error: "Doctor not found" });
+
+    const newFees = fees !== undefined ? parseFloat(fees) : doctor.fees;
+    const newAvail = availability !== undefined ? (typeof availability === "string" ? availability : JSON.stringify(availability)) : doctor.availability;
+    const newPhone = phone !== undefined ? phone : doctor.phone;
+    const newBio = bio !== undefined ? bio : doctor.bio;
+
+    db.prepare("UPDATE doctors SET fees = ?, availability = ?, phone = ?, bio = ? WHERE id = ?").run(
+      newFees,
+      newAvail,
+      newPhone,
+      newBio,
+      req.params.id
+    );
+    const updated = db.prepare("SELECT * FROM doctors WHERE id = ?").get(req.params.id);
+    res.json({ success: true, message: "Doctor schedule updated successfully", data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

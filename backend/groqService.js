@@ -1,28 +1,66 @@
 // ==========================================================================
 // GROQ AI CLINICAL DIAGNOSTIC & SYMPTOM EVALUATION SERVICE
-// Powered by Groq Ultra-Fast Inference API (qwen/qwen3.8-27b & gpt-oss-120b)
+// Powered by Groq Ultra-Fast Inference API (Llama 3.3 70B & Llama 3.1 8B)
 // ==========================================================================
 
-const GROQ_API_KEY =
-  process.env.GROQ_API_KEY ||
-  "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";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const GROQ_MODELS = [
-  "qwen/qwen3.8-27b",
-  "openai/gpt-oss-120b",
-  "openai/gpt-oss-20b"
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it"
 ];
+
+/**
+ * Retrieve and resolve the best available Groq API Key
+ */
+export function getGroqApiKey(customKey = null) {
+  if (customKey && typeof customKey === "string" && customKey.trim().startsWith("gsk_")) {
+    return customKey.trim();
+  }
+  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim().startsWith("gsk_")) {
+    return process.env.GROQ_API_KEY.trim();
+  }
+  // Check backend/.env
+  try {
+    const envPath = path.resolve(__dirname, ".env");
+    if (fs.existsSync(envPath)) {
+      const txt = fs.readFileSync(envPath, "utf-8");
+      const match = txt.match(/GROQ_API_KEY\s*=\s*(gsk_[a-zA-Z0-9_-]+)/);
+      if (match && match[1]) return match[1].trim();
+    }
+  } catch {}
+  // Check root apikey.txt
+  try {
+    const rootPath = path.resolve(__dirname, "..", "apikey.txt");
+    if (fs.existsSync(rootPath)) {
+      const txt = fs.readFileSync(rootPath, "utf-8");
+      const match = txt.match(/(gsk_[a-zA-Z0-9_-]+)/);
+      if (match && match[1]) return match[1].trim();
+    }
+  } catch {}
+  return "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";
+}
 
 /**
  * Evaluate patient symptoms using Groq API
  * @param {Array<{ symptom: string, severity: string, effectiveFrom: string }>} symptoms
  * @param {string} patientNotes
  * @param {object} patientProfile
+ * @param {string|null} customApiKey
  */
-export async function evaluateSymptomsWithGroq(symptoms = [], patientNotes = "", patientProfile = {}) {
+export async function evaluateSymptomsWithGroq(symptoms = [], patientNotes = "", patientProfile = {}, customApiKey = null) {
   if (!Array.isArray(symptoms) || symptoms.length === 0) {
     throw new Error("At least one symptom is required for clinical evaluation.");
   }
+
+  const apiKey = getGroqApiKey(customApiKey);
 
   // Format structured symptoms narrative
   const symptomsText = symptoms
@@ -73,7 +111,7 @@ Format your response in structured JSON with the following exact keys:
   "disclaimer": "Medical AI Sushruta provides educational clinical guidance. This does not replace a definitive in-person examination by a licensed medical practitioner."
 }
 
-Only return valid JSON without Markdown backticks if possible, or with standard json block. Do not add conversational pleasantries.`;
+Only return valid JSON without Markdown backticks if possible. Do not add conversational pleasantries.`;
 
   const userPrompt = `Patient Demographics: Age ${patientProfile.age || "Adult"}, Gender: ${patientProfile.gender || "Unspecified"}.
 Documented Pre-existing: ${patientProfile.chronic_conditions || "None reported"}.
@@ -91,7 +129,7 @@ Perform the comprehensive clinical diagnostic analysis now and return the JSON e
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -109,7 +147,6 @@ Perform the comprehensive clinical diagnostic analysis now and return the JSON e
         const data = await response.json();
         const rawContent = data.choices?.[0]?.message?.content;
         if (rawContent) {
-          // Attempt JSON parse
           let clean = rawContent.trim();
           if (clean.startsWith("```json")) clean = clean.slice(7);
           if (clean.startsWith("```")) clean = clean.slice(3);
@@ -125,7 +162,6 @@ Perform the comprehensive clinical diagnostic analysis now and return the JSON e
               rawText: rawContent
             };
           } catch (jsonErr) {
-            // If model returned rich markdown instead of strict JSON, structure it cleanly
             return {
               success: true,
               engine: `Groq (${model})`,
@@ -144,7 +180,7 @@ Perform the comprehensive clinical diagnostic analysis now and return the JSON e
                 potentialComplications: ["Requires clinical correlation by attending physician"],
                 pathophysiologySummary: clean.slice(0, 500),
                 recommendedDiagnostics: [
-                  { test: "Routine Complete Blood Count & Metabolic Panel", purpose: "Baseline inflammatory and organ function review" }
+                  { test: "Complete Blood Count & Metabolic Panel", purpose: "Baseline inflammatory and organ function review" }
                 ],
                 immediateActions: ["Monitor vitals closely", "Stay hydrated and rest", "Seek urgent care if symptoms worsen"],
                 recommendedSpecialist: "General Physician / Internist",
@@ -154,17 +190,13 @@ Perform the comprehensive clinical diagnostic analysis now and return the JSON e
             };
           }
         }
-      } else {
-        const errBody = await response.text().catch(() => "");
-        console.warn(`Groq model ${model} error (${response.status}): ${errBody.slice(0, 150)}`);
       }
     } catch (err) {
       console.warn(`Groq request failed with model ${model}: ${err.message}`);
     }
   }
 
-  // Graceful Fallback: Generate intelligent clinical differential if Groq network is unreachable
-  console.warn("Groq online models unreachable. Activating clinical expert system fallback.");
+  // Graceful Fallback
   return generateClinicalFallback(symptoms, patientNotes, patientProfile);
 }
 
@@ -214,12 +246,10 @@ function generateClinicalFallback(symptoms = [], patientNotes = "", patientProfi
 /**
  * Interactive Clinical Chat Inference powered by Groq
  * @param {string} userQuery
+ * @param {string|null} customApiKey
  */
-export async function generateChatWithGroq(userQuery) {
-  const apiKey =
-    process.env.GROQ_API_KEY ||
-    "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";
-
+export async function generateChatWithGroq(userQuery, customApiKey = null) {
+  const apiKey = getGroqApiKey(customApiKey);
   if (!apiKey) return null;
 
   const systemInstruction = `You are "Medical AI Sushruta", an advanced, compassionate, articulate, and authoritative clinical AI medical educational assistant.
@@ -239,7 +269,7 @@ Format with clear headers and bullet points. Be empathetic, clear, and reassurin
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -268,33 +298,49 @@ Format with clear headers and bullet points. Be empathetic, clear, and reassurin
 }
 
 /**
- * Report Biomarker Extraction powered by Groq
+ * Comprehensive Medical Report Analysis & Biomarker Extraction powered by Groq
  * @param {string} reportText
+ * @param {string|null} customApiKey
  */
-export async function extractBiomarkersWithGroq(reportText) {
-  const apiKey =
-    process.env.GROQ_API_KEY ||
-    "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";
-
+export async function extractBiomarkersWithGroq(reportText, customApiKey = null) {
+  const apiKey = getGroqApiKey(customApiKey);
   if (!apiKey || !reportText) return null;
 
-  const systemPrompt = `You are Medical AI Sushruta, an expert clinical pathologist and lab diagnostic intelligence AI.
-Carefully examine this medical report text or document.
-Extract ALL actual lab test biomarkers with their exact measured numerical or qualitative values, their units, and the exact reference intervals reported.
-Evaluate the clinical status for each marker as: "Optimal", "Elevated", "Low", or "Critical".
+  const systemPrompt = `You are "Medical AI Sushruta - Clinical Diagnostic & Laboratory Pathologist AI".
+Carefully analyze the provided laboratory report, blood test, metabolic panel, or pathology findings.
+Extract all actual biomarkers with their exact numerical or qualitative values, units, and reference ranges.
+Evaluate each marker status as: "Optimal", "Elevated", "Low", or "Critical".
 Evaluate overall report status as: "optimal", "attention", or "critical".
-Provide a clear 3-4 sentence clinical summary explaining the specific findings and practical questions to discuss with their physician.
+Determine the triage level: "MILD", "MODERATE", "URGENT", or "CRITICAL".
+Identify the organ systems impacted (e.g. Endocrine, Renal, Hepatic, Cardiovascular, Hematologic).
+List potential clinical risks / downstream complications if abnormal values persist.
+Provide concrete clinical recommendations (lifestyle, hydration, retesting interval).
+Specify the recommended physician specialist (e.g. "Endocrinologist", "Cardiologist", "Nephrologist", "Gastroenterologist", "Hematologist", "General Physician").
 
-Return STRICT JSON ONLY (no markdown code fences, just raw JSON matching this schema):
+Return STRICT JSON matching this schema:
 {
-  "status": "attention" or "optimal",
-  "summary": "Clinical interpretation of specific findings...",
+  "status": "optimal" | "attention" | "critical",
+  "triageLevel": "MILD" | "MODERATE" | "URGENT" | "CRITICAL",
+  "urgencyBadge": "Optimal Baseline" | "Routine Clinical Attention" | "Urgent Physician Consultation",
+  "summary": "Clear, detailed clinical summary describing the findings and clinical meaning.",
+  "recommendedSpecialist": "Type of physician specialist to consult",
+  "organSystemsImpacted": [
+    { "system": "Endocrine / Glycemic", "status": "Attention", "note": "Elevated fasting glucose indicates insulin resistance" }
+  ],
+  "potentialRisks": [
+    "Specific potential risk if unmanaged"
+  ],
+  "clinicalRecommendations": [
+    "Actionable guidance or diagnostic recheck"
+  ],
   "biomarkers": [
     {
       "name": "Exact Test Name",
-      "value": "Exact Number with Unit (e.g. 148 mg/dL)",
-      "ref": "Reference range (e.g. 70.0 - 99.0 mg/dL)",
-      "status": "Optimal" or "Elevated" or "Low" or "Critical"
+      "value": "Exact Value with Unit",
+      "ref": "Reference range",
+      "status": "Optimal" | "Elevated" | "Low" | "Critical",
+      "category": "Metabolic" | "Lipid" | "Renal" | "Hepatic" | "Hematology" | "Thyroid" | "General",
+      "clinicalSignificance": "Brief explanation of this biomarker"
     }
   ]
 }`;
@@ -304,17 +350,17 @@ Return STRICT JSON ONLY (no markdown code fences, just raw JSON matching this sc
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
           model,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `Report Content:\n${reportText}` }
+            { role: "user", content: `Medical Report Document Content:\n${reportText}` }
           ],
           temperature: 0.1,
-          max_tokens: 2048,
+          max_tokens: 3000,
           response_format: { type: "json_object" }
         })
       });
@@ -325,6 +371,7 @@ Return STRICT JSON ONLY (no markdown code fences, just raw JSON matching this sc
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed.biomarkers) && parsed.biomarkers.length > 0) {
+            parsed.engine = `Groq (${model})`;
             return parsed;
           }
         }
@@ -335,5 +382,3 @@ Return STRICT JSON ONLY (no markdown code fences, just raw JSON matching this sc
   }
   return null;
 }
-
-

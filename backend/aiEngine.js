@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateChatWithGroq, extractBiomarkersWithGroq } from "./groqService.js";
+import { matchClinicalKnowledge } from "./clinicalKnowledge.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -130,7 +131,23 @@ Do not write a generic legal disclaimer at the end because one will be appended 
 function extractClinicalKeywords(text) {
   const query = (text || "").toLowerCase();
   const candidates = [
-    "Oncology", "Cancer", "Tumor", "Biopsy", "Fever", "Creatinine", "Renal", "Kidney",
+    "Pain", "Fever", "Headache", "Cough", "Cold", "Runny nose", "Sore throat", "Stomach pain", "Fatigue", "Weakness", 
+    "Body aches", "Joint pain", "Muscle pain", "Back pain", "Neck pain", "Dizziness", "Vomiting", "Nausea", "Diarrhea", "Constipation", 
+    "Loss of appetite", "Insomnia", "Night sweats", "Chills", "Shivering", "Weight loss", "Weight gain", "Swelling", "Inflammation", "Itching", 
+    "Burning sensation", "Numbness", "Tingling", "Breathlessness", "Shortness of breath", "Chest congestion", "Phlegm", "Sputum", "Scratchy throat", "Sneezing", 
+    "Asthma", "Sinus", "Suffocation", "Snoring", "Dry cough", "Gas", "Bloating", "Acidity", "Heartburn", "Indigestion", 
+    "Sour eructations", "Blood in stool", "Piles", "Hemorrhoids", "Stomach burning", "Liver problems", "Palpitations", "Rapid heartbeat", "Chest pain", "Blood Pressure", 
+    "High BP", "Hypertension", "Low BP", "Hypotension", "Cholesterol", "Heart attack", "Poor circulation", "Pulse rate", "Skin rash", "Blemishes", 
+    "Pimples", "Acne", "Allergy", "Infection", "Psoriasis", "Eczema", "Boils", "Abscess", "Heat rash", "Dry skin", 
+    "Hair fall", "Dandruff", "Migraine", "Stress", "Anxiety", "Depression", "Mood swings", "Forgetfulness", "Memory loss", "Fits", 
+    "Seizures", "Paralysis", "Stroke", "Nerve weakness", "Tension", "Diabetes", "High Sugar", "Thyroid", "Arthritis", "Uric acid", 
+    "Kidney stones", "Fatty liver", "Cancer", "UTI", "Urinary infection", "Irregular periods", "Menstrual cramps", "Period pain", "White discharge", "Pregnancy", 
+    "PCOD", "PCOS", "Ovarian cysts", "Menopause", "Breast lumps", "Morning sickness", "Erectile Dysfunction", "Premature ejaculation", "Low sperm count", "Prostate problems", 
+    "Low testosterone", "Blood test", "Urine test", "Ultrasound", "Scan", "X-ray", "MRI scan", "CT scan", "ECG", "Report analysis", 
+    "Normal ranges", "Hemoglobin", "Platelets", "CBP test", "Tablet", "Capsule", "Syrup", "Side effects", "Dosage", "Antibiotics", 
+    "Pain killers", "Vaccine", "Ointment", "Home remedies", "First aid", "Diet plan", "Calories", "Vitamins", "Calcium", "Iron deficiency", 
+    "Protein", "Weight loss tips", "Immunity booster", "Medical emergency", "Accident", "Injury", "Wound", "Bleeding", "Fainting", "Unconsciousness", 
+    "Snake bite", "Dog bite", "Poison", "Eye pain", "Ear pain", "Toothache", "Doctor appointment", "Which doctor to consult", "Second opinion", "Health checkup","Oncology", "Cancer", "Tumor", "Biopsy", "Fever", "Creatinine", "Renal", "Kidney",
     "CBC", "WBC", "Platelet", "Hemoglobin", "Anemia", "Migraine", "Headache",
     "Cardiac", "Chest Pain", "Cardiovascular", "Hypertension", "Blood Pressure",
     "Diabetes", "Glucose", "HbA1c", "Lipid", "Cholesterol", "Liver", "AST/ALT",
@@ -463,7 +480,21 @@ export async function processChatQuery(userMessage) {
     console.warn("Groq chat bypassed:", err.message);
   }
 
-  // 3. Check Extensive Clinical Knowledge Base (Tier 2)
+  // 3. Check Extensive Clinical Knowledge Base (Tier 2: 130+ Static Clinical Terms)
+  const clinicalMatch = matchClinicalKnowledge(userMessage);
+  if (clinicalMatch) {
+    const rawTitle = clinicalMatch.title.includes(":") ? clinicalMatch.title.split(":")[0].trim() : clinicalMatch.title;
+    const keywords = extractClinicalKeywords(userMessage + " " + clinicalMatch.title);
+    if (!keywords.includes(clinicalMatch.matchedKeyword)) {
+      keywords.unshift(clinicalMatch.matchedKeyword.charAt(0).toUpperCase() + clinicalMatch.matchedKeyword.slice(1));
+    }
+    return {
+      response: clinicalMatch.response + DISCLAIMER,
+      matchedKeywords: keywords.slice(0, 4)
+    };
+  }
+
+  // Legacy Knowledge Base Check
   const cleanQuery = userMessage.toLowerCase();
   for (const item of KNOWLEDGE_BASE) {
     for (const kw of item.keywords) {
@@ -902,16 +933,23 @@ ${text}`;
 }
 
 export async function analyzeReportContent(text, filename = "Diagnostic_Report.pdf", fileContext = {}) {
-  // 1. Try Live Gemini First
+  // 1. Try Groq Clinical Parser First if requested or available
   let aiResult = null;
-  try {
-    aiResult = await extractBiomarkersWithGemini(text, fileContext);
-  } catch { }
+  const customGroqKey = fileContext?.groqApiKey || null;
 
-  // 2. Try Groq Clinical Parser Second
-  if ((!aiResult || !aiResult.biomarkers || aiResult.biomarkers.length === 0) && text) {
+  if (text) {
     try {
-      aiResult = await extractBiomarkersWithGroq(text);
+      aiResult = await extractBiomarkersWithGroq(text, customGroqKey);
+    } catch (err) {
+      console.warn("Groq extraction error:", err.message);
+    }
+  }
+
+  // 2. Try Live Gemini if Groq didn't return biomarkers
+  if ((!aiResult || !aiResult.biomarkers || aiResult.biomarkers.length === 0)) {
+    try {
+      aiResult = await extractBiomarkersWithGemini(text, fileContext);
+      if (aiResult) aiResult.engine = "Gemini Multimodal";
     } catch { }
   }
 
@@ -919,20 +957,37 @@ export async function analyzeReportContent(text, filename = "Diagnostic_Report.p
     return {
       filename,
       status: aiResult.status || "optimal",
+      triageLevel: aiResult.triageLevel || (aiResult.status === "attention" ? "MODERATE" : "MILD"),
+      urgencyBadge: aiResult.urgencyBadge || (aiResult.status === "attention" ? "Physician Review Advised" : "Optimal Baseline"),
       summary: (aiResult.summary || "Clinical diagnostic evaluation completed.") + DISCLAIMER,
-      biomarkers: aiResult.biomarkers
+      biomarkers: aiResult.biomarkers,
+      organSystemsImpacted: aiResult.organSystemsImpacted || [],
+      potentialRisks: aiResult.potentialRisks || [],
+      clinicalRecommendations: aiResult.clinicalRecommendations || [
+        "Discuss out-of-range indicators with your primary physician.",
+        "Maintain routine health monitoring and stay hydrated."
+      ],
+      recommendedSpecialist: aiResult.recommendedSpecialist || "General Physician",
+      engineUsed: aiResult.engine || "Groq Clinical AI"
     };
   }
 
-  // 2. High-Precision Local Clinical Extraction (Extracts EXACT numbers from user's report)
+  // 3. High-Precision Local Clinical Extraction (Extracts EXACT numbers from user's report)
   const biomarkers = extractBiomarkersLocally(text);
 
   if (biomarkers.length === 0) {
     return {
       filename,
       status: "optimal",
+      triageLevel: "MILD",
+      urgencyBadge: "Document Verified",
       summary: `Diagnostic review of "${filename}" did not identify numerical lab biomarkers in the provided content. Please ensure the file contains readable test metrics (e.g., "Fasting Glucose: 110 mg/dL, HbA1c: 6.2%") or paste the values directly into the text field.${DISCLAIMER}`,
-      biomarkers: []
+      biomarkers: [],
+      organSystemsImpacted: [],
+      potentialRisks: [],
+      clinicalRecommendations: ["Ensure complete laboratory metrics with units and values are included."],
+      recommendedSpecialist: "General Physician",
+      engineUsed: "Sushruta Precision Clinical Engine"
     };
   }
 
@@ -940,12 +995,74 @@ export async function analyzeReportContent(text, filename = "Diagnostic_Report.p
   const optimal = biomarkers.filter(b => b.status && (b.status.toLowerCase().includes("optimal") || b.status.toLowerCase().includes("normal")));
 
   const status = abnormal.length > 0 ? "attention" : "optimal";
-  let summary = "";
+  const triageLevel = abnormal.some(b => (b.status || "").toLowerCase().includes("critical") || (b.status || "").toLowerCase().includes("high risk"))
+    ? "URGENT"
+    : abnormal.length > 0
+    ? "MODERATE"
+    : "MILD";
 
+  const urgencyBadge = triageLevel === "URGENT"
+    ? "Urgent Physician Consultation"
+    : triageLevel === "MODERATE"
+    ? "Physician Review Advised"
+    : "Optimal Baseline";
+
+  // Synthesize organ systems and specialist
+  const organSystemsImpacted = [];
+  const potentialRisks = [];
+  const clinicalRecommendations = [];
+  let recommendedSpecialist = "General Physician";
+
+  const abnormalNames = abnormal.map(b => b.name.toLowerCase());
+  if (abnormalNames.some(n => n.includes("glucose") || n.includes("hba1c"))) {
+    organSystemsImpacted.push({ system: "Endocrine & Glycemic Control", status: "Attention", note: "Dysregulated blood glucose markers indicate impaired carbohydrate metabolism." });
+    potentialRisks.push("Progressive insulin resistance, pre-diabetic or diabetic metabolic dysregulation.");
+    clinicalRecommendations.push("Repeat fasting plasma glucose and HbA1c in 4-6 weeks; monitor carbohydrate intake.");
+    recommendedSpecialist = "Endocrinologist";
+  }
+  if (abnormalNames.some(n => n.includes("creatinine") || n.includes("bun") || n.includes("egfr") || n.includes("uric acid"))) {
+    organSystemsImpacted.push({ system: "Renal Function", status: "Attention", note: "Elevated waste metabolites suggest altered glomerular filtration or dehydration." });
+    potentialRisks.push("Decreased renal clearance efficiency, electrolyte disturbances.");
+    clinicalRecommendations.push("Ensure adequate daily hydration (2-2.5L water unless restricted) and avoid nephrotoxic NSAIDs.");
+    recommendedSpecialist = "Nephrologist";
+  }
+  if (abnormalNames.some(n => n.includes("cholesterol") || n.includes("triglyceride") || n.includes("ldl") || n.includes("crp"))) {
+    organSystemsImpacted.push({ system: "Cardiovascular & Lipid Profile", status: "Attention", note: "Atherogenic lipid distribution or elevated inflammatory vascular markers." });
+    potentialRisks.push("Long-term endothelial stress and elevated cardiovascular risk.");
+    clinicalRecommendations.push("Incorporate Mediterranean dietary patterns and aerobic activity; schedule lipid panel review.");
+    if (recommendedSpecialist === "General Physician") recommendedSpecialist = "Cardiologist";
+  }
+  if (abnormalNames.some(n => n.includes("alt") || n.includes("ast") || n.includes("bilirubin") || n.includes("alp"))) {
+    organSystemsImpacted.push({ system: "Hepatic & Biliary Function", status: "Attention", note: "Transaminase elevation indicates hepatocellular stress or metabolic liver load." });
+    potentialRisks.push("Hepatic steatosis or metabolic hepatic inflammation.");
+    clinicalRecommendations.push("Limit alcohol and hepatically metabolized substances; schedule abdominal ultrasound if persistent.");
+    if (recommendedSpecialist === "General Physician") recommendedSpecialist = "Gastroenterologist";
+  }
+  if (abnormalNames.some(n => n.includes("hemoglobin") || n.includes("wbc") || n.includes("platelet") || n.includes("ferritin"))) {
+    organSystemsImpacted.push({ system: "Hematologic System", status: "Attention", note: "Deviations in red cell count, white cell response, or iron storage." });
+    potentialRisks.push("Fatigue from sub-optimal oxygen carrying capacity or active immune activation.");
+    clinicalRecommendations.push("Assess dietary iron/vitamin B12 intake and re-evaluate CBC with differential.");
+    if (recommendedSpecialist === "General Physician") recommendedSpecialist = "Hematologist";
+  }
+  if (abnormalNames.some(n => n.includes("tsh") || n.includes("t3") || n.includes("t4"))) {
+    organSystemsImpacted.push({ system: "Thyroid Endocrine Axis", status: "Attention", note: "Thyroid hormone output or pituitary feedback loops outside normal ranges." });
+    potentialRisks.push("Metabolic rate fluctuations, fatigue, or mood disturbances.");
+    clinicalRecommendations.push("Consult an endocrinologist for comprehensive thyroid antibody (anti-TPO) and ultrasound review.");
+    recommendedSpecialist = "Endocrinologist";
+  }
+
+  if (clinicalRecommendations.length === 0) {
+    clinicalRecommendations.push(
+      "Maintain balanced hydration, nutritious diet, and regular physical activity.",
+      "Bring this comprehensive laboratory breakdown to your next scheduled clinical checkup."
+    );
+  }
+
+  let summary = "";
   if (abnormal.length > 0) {
     const abnormalList = abnormal.map(b => `${b.name} is ${b.status.toLowerCase()} at ${b.value} (ref: ${b.ref})`).join("; ");
     const optimalMention = optimal.length > 0 ? ` Normal physiological findings were confirmed in ${optimal.length} marker(s) including ${optimal.slice(0, 3).map(o => o.name).join(", ")}.` : "";
-    summary = `Clinical review of "${filename}" identified ${abnormal.length} biomarker(s) outside standard reference intervals: ${abnormalList}.${optimalMention} Targeted medical follow-up with your physician is advised to correlate these specific findings.`;
+    summary = `Clinical review of "${filename}" identified ${abnormal.length} biomarker(s) outside standard reference intervals: ${abnormalList}.${optimalMention} Targeted medical follow-up with a ${recommendedSpecialist} is advised to correlate these specific findings.`;
   } else {
     const listNames = biomarkers.slice(0, 4).map(b => b.name).join(", ");
     summary = `Diagnostic review of "${filename}" confirms that all ${biomarkers.length} identified biomarkers (${listNames}) are aligned within normative reference intervals. Continue scheduled routine health maintenance.`;
@@ -954,7 +1071,14 @@ export async function analyzeReportContent(text, filename = "Diagnostic_Report.p
   return {
     filename,
     status,
+    triageLevel,
+    urgencyBadge,
     summary: summary + DISCLAIMER,
-    biomarkers
+    biomarkers,
+    organSystemsImpacted,
+    potentialRisks,
+    clinicalRecommendations,
+    recommendedSpecialist,
+    engineUsed: "Sushruta Precision Clinical Engine"
   };
 }
