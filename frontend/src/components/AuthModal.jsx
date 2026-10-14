@@ -2,6 +2,24 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 
+const DOCTOR_SPECIALIZATIONS = [
+  "General Medicine",
+  "Cardiology",
+  "Neurology",
+  "Dermatology",
+  "Endocrinology",
+  "Orthopedics",
+  "Psychiatry",
+  "Pediatrics",
+  "Gynecology",
+  "Nephrology",
+  "Gastroenterology",
+  "Oncology",
+  "Hematology",
+  "Pulmonology",
+  "Ophthalmology"
+];
+
 export default function AuthModal({ isOpen, onClose }) {
   const { user, login, logout, quickSwitch } = useAuth();
   const [activeTab, setActiveTab] = useState("login"); // "login" | "quick" | "register"
@@ -16,6 +34,15 @@ export default function AuthModal({ isOpen, onClose }) {
   const [regPassword, setRegPassword] = useState("");
   const [regRole, setRegRole] = useState("patient");
   const [regPhone, setRegPhone] = useState("");
+
+  // Doctor-specific registration state
+  const [regSpecialization, setRegSpecialization] = useState("General Medicine");
+  const [regLicenseNumber, setRegLicenseNumber] = useState("");
+  const [regExperience, setRegExperience] = useState("5");
+  const [regFees, setRegFees] = useState("120");
+  const [regBio, setRegBio] = useState("");
+  const [regCertificateFile, setRegCertificateFile] = useState(null);
+  const [fileDragActive, setFileDragActive] = useState(false);
 
   // Demo accounts
   const [demoAccounts, setDemoAccounts] = useState([]);
@@ -55,20 +82,61 @@ export default function AuthModal({ isOpen, onClose }) {
     setMessage({ type: "", text: "" });
 
     try {
-      const res = await API.post("/api/auth/register", {
-        name: regName,
-        email: regEmail,
-        password: regPassword,
-        role: regRole,
-        contactInfo: regPhone
-      });
+      let res;
+      if (regRole === "doctor") {
+        if (!regCertificateFile) {
+          setMessage({
+            type: "error",
+            text: "Please attach your original medical certificate (PDF or Image) for administrator verification."
+          });
+          setLoading(false);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("name", regName);
+        formData.append("email", regEmail);
+        formData.append("password", regPassword);
+        formData.append("role", "doctor");
+        formData.append("contactInfo", regPhone);
+        formData.append("phone", regPhone);
+        formData.append("specialization", regSpecialization);
+        formData.append("licenseNumber", regLicenseNumber);
+        formData.append("experience", regExperience);
+        formData.append("fees", regFees);
+        formData.append("bio", regBio);
+        formData.append("certificate", regCertificateFile);
+
+        res = await API.post("/api/auth/register", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+      } else {
+        res = await API.post("/api/auth/register", {
+          name: regName,
+          email: regEmail,
+          password: regPassword,
+          role: regRole,
+          contactInfo: regPhone
+        });
+      }
 
       if (res.data.success) {
-        setMessage({ type: "success", text: "✓ Account registered! Signing you in..." });
-        await login(regEmail, regPassword);
-        setTimeout(() => {
-          onClose();
-        }, 1200);
+        if (regRole === "doctor") {
+          setMessage({
+            type: "success",
+            text: "✓ Doctor account created! Your original certification is now awaiting administrator review."
+          });
+          await login(regEmail, regPassword);
+          setTimeout(() => {
+            onClose();
+          }, 1800);
+        } else {
+          setMessage({ type: "success", text: "✓ Account registered! Signing you in..." });
+          await login(regEmail, regPassword);
+          setTimeout(() => {
+            onClose();
+          }, 1200);
+        }
       }
     } catch (err) {
       setMessage({ type: "error", text: err.response?.data?.message || "Registration failed." });
@@ -107,7 +175,9 @@ export default function AuthModal({ isOpen, onClose }) {
         className="cyber-card"
         style={{
           width: "100%",
-          maxWidth: 580,
+          maxWidth: 620,
+          maxHeight: "92vh",
+          overflowY: "auto",
           padding: 28,
           boxShadow: "var(--glow-cyan)",
           border: "1px solid var(--neon-cyan)",
@@ -434,12 +504,12 @@ export default function AuthModal({ isOpen, onClose }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
                 <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
-                  FULL NAME
+                  FULL NAME {regRole === "doctor" ? "(PHYSICIAN)" : ""}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. David Vance"
+                  placeholder={regRole === "doctor" ? "e.g. Dr. Arthur Bennett, MD" : "e.g. David Vance"}
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
@@ -454,38 +524,24 @@ export default function AuthModal({ isOpen, onClose }) {
                   onChange={(e) => setRegRole(e.target.value)}
                   style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
                 >
-                  <option value="patient">Patient Account</option>
-                  <option value="doctor">Medical Doctor</option>
-                  <option value="admin">Administrator</option>
+                  <option value="patient">👤 Patient Account</option>
+                  <option value="doctor">🩺 Medical Doctor (Attending)</option>
+                  <option value="admin">👑 Administrator</option>
                 </select>
               </div>
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
-                EMAIL ADDRESS
-              </label>
-              <input
-                type="email"
-                required
-                placeholder="name@example.com"
-                value={regEmail}
-                onChange={(e) => setRegEmail(e.target.value)}
-                style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
-              />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
                 <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
-                  PASSWORD
+                  EMAIL ADDRESS
                 </label>
                 <input
-                  type="password"
+                  type="email"
                   required
-                  placeholder="••••••••"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="name@example.com"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
                   style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
                 />
               </div>
@@ -503,14 +559,233 @@ export default function AuthModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
+                PASSWORD
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={regPassword}
+                onChange={(e) => setRegPassword(e.target.value)}
+                style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
+              />
+            </div>
+
+            {/* Doctor-Specific Verification & Credentials Section */}
+            {regRole === "doctor" && (
+              <div
+                style={{
+                  marginTop: 4,
+                  padding: "14px",
+                  background: "rgba(102, 252, 241, 0.04)",
+                  border: "1px solid rgba(102, 252, 241, 0.25)",
+                  borderRadius: "var(--radius)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 14 }}>🩺</span>
+                    <strong style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--neon-cyan)" }}>
+                      PHYSICIAN CREDENTIALS & BOARD VERIFICATION
+                    </strong>
+                  </div>
+                  <span className="status-badge attention" style={{ fontSize: 9 }}>
+                    REQUIRES ADMIN APPROVAL
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
+                      SPECIALIZATION *
+                    </label>
+                    <select
+                      value={regSpecialization}
+                      onChange={(e) => setRegSpecialization(e.target.value)}
+                      style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
+                    >
+                      {DOCTOR_SPECIALIZATIONS.map((spec) => (
+                        <option key={spec} value={spec}>{spec}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
+                      MEDICAL LICENSE / REG. ID *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. MD-98421-NY / MCI-4812"
+                      value={regLicenseNumber}
+                      onChange={(e) => setRegLicenseNumber(e.target.value)}
+                      style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
+                      YEARS OF EXPERIENCE
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={regExperience}
+                      onChange={(e) => setRegExperience(e.target.value)}
+                      style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
+                      CONSULTATION FEE ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="20"
+                      max="1000"
+                      value={regFees}
+                      onChange={(e) => setRegFees(e.target.value)}
+                      style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: 4 }}>
+                    CLINICAL BIO / QUALIFICATIONS SUMMARY
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Board Certified Specialist in Cardiovascular Diseases, Fellowship at Mayo Clinic."
+                    value={regBio}
+                    onChange={(e) => setRegBio(e.target.value)}
+                    style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "var(--radius)", padding: "8px 10px", color: "var(--text-primary)", fontSize: 12, resize: "none" }}
+                  />
+                </div>
+
+                {/* UPLOAD ORIGINAL DOCTOR CERTIFICATION */}
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--neon-cyan)", marginBottom: 4, fontWeight: 700 }}>
+                    📄 ORIGINAL DOCTOR CERTIFICATION / MEDICAL LICENSE *
+                  </label>
+
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setFileDragActive(true); }}
+                    onDragLeave={() => setFileDragActive(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setFileDragActive(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        setRegCertificateFile(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    style={{
+                      border: fileDragActive
+                        ? "2px dashed var(--neon-cyan)"
+                        : regCertificateFile
+                        ? "1px solid var(--neon-green)"
+                        : "1px dashed var(--border-default)",
+                      borderRadius: "var(--radius)",
+                      padding: "16px",
+                      textAlign: "center",
+                      background: fileDragActive
+                        ? "rgba(102, 252, 241, 0.12)"
+                        : regCertificateFile
+                        ? "rgba(0, 255, 135, 0.05)"
+                        : "var(--bg-input)",
+                      cursor: "pointer",
+                      transition: "var(--transition)",
+                    }}
+                    onClick={() => {
+                      document.getElementById("doctor-cert-file-input")?.click();
+                    }}
+                  >
+                    <input
+                      id="doctor-cert-file-input"
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setRegCertificateFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+
+                    {regCertificateFile ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left" }}>
+                          <span style={{ fontSize: 24 }}>📜</span>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--neon-green)" }}>
+                              {regCertificateFile.name}
+                            </div>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                              {(regCertificateFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for submission
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRegCertificateFile(null);
+                          }}
+                          style={{
+                            background: "rgba(255, 0, 64, 0.15)",
+                            border: "1px solid var(--neon-red)",
+                            color: "var(--neon-red)",
+                            borderRadius: "4px",
+                            padding: "4px 8px",
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✕ Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 26, marginBottom: 6 }}>📑</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                          Click to browse or drag & drop original certification
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                          Accepted: Medical Board License, Degree, or Council Certificate (PDF, PNG, JPG up to 10MB)
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 6, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                    <span>ℹ️</span>
+                    <span>
+                      <strong>Admin Verification:</strong> The Administrator reviews this original document on the Admin Verification Board before activating your public consultation schedule.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
               <button
                 type="submit"
                 className="btn-cyber"
-                disabled={loading || !regName || !regEmail || !regPassword}
-                style={{ fontSize: 11, padding: "9px 20px" }}
+                disabled={loading || !regName || !regEmail || !regPassword || (regRole === "doctor" && (!regCertificateFile || !regLicenseNumber))}
+                style={{ fontSize: 11, padding: "10px 22px" }}
               >
-                <span>{loading ? "CREATING..." : "💾 CREATE ACCOUNT"}</span>
+                <span>{loading ? "CREATING & UPLOADING..." : regRole === "doctor" ? "📑 SUBMIT FOR VERIFICATION" : "💾 CREATE ACCOUNT"}</span>
               </button>
             </div>
           </form>

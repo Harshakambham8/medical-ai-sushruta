@@ -56,6 +56,7 @@ const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+app.use("/uploads", express.static(uploadsDir));
 
 async function extractPdfText(buffer) {
   if (!buffer || buffer.length === 0) return "";
@@ -1362,8 +1363,14 @@ app.post("/api/auth/login", (req, res) => {
 
     // If role is doctor, fetch doctor profile details
     let doctor = null;
-    if (user.role === "doctor" && user.doctor_id) {
-      const doc = db.prepare("SELECT * FROM doctors WHERE id = ?").get(user.doctor_id);
+    if (user.role === "doctor") {
+      let doc = null;
+      if (user.doctor_id) {
+        doc = db.prepare("SELECT * FROM doctors WHERE id = ?").get(user.doctor_id);
+      }
+      if (!doc && user.email) {
+        doc = db.prepare("SELECT * FROM doctors WHERE LOWER(email) = LOWER(?)").get(user.email.trim());
+      }
       if (doc) {
         doctor = {
           ...doc,
@@ -1379,7 +1386,7 @@ app.post("/api/auth/login", (req, res) => {
       email: user.email,
       role: user.role,
       contactInfo: user.contact_info,
-      doctorId: user.doctor_id
+      doctorId: user.doctor_id || doctor?.id || null
     };
 
     res.json({
@@ -1395,25 +1402,151 @@ app.post("/api/auth/login", (req, res) => {
   }
 });
 
-// POST /api/auth/register — Create a new patient or doctor account
-app.post("/api/auth/register", (req, res) => {
+// Multipart handler middleware for doctor registration with certificate document
+const uploadAuthCertificate = (req, res, next) => {
+  const contentType = req.headers["content-type"] || "";
+  if (contentType.includes("multipart/form-data")) {
+    return upload.single("certificate")(req, res, (err) => {
+      if (err) {
+        console.error("Certificate upload error:", err);
+        return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
+      }
+      next();
+    });
+  }
+  next();
+};
+
+// POST /api/auth/register — Create a new patient or doctor account with certification document
+app.post("/api/auth/register", uploadAuthCertificate, (req, res) => {
   try {
-    const { name, email, password, role = "patient", contactInfo } = req.body;
+    const {
+      name,
+      email,
+      password,
+      role = "patient",
+      contactInfo,
+      phone,
+      specialization = "General Medicine",
+      licenseNumber = "",
+      experience = 5,
+      fees = 100,
+      bio = ""
+    } = req.body;
+
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: "Name, email, and password are required" });
     }
 
-    const existing = db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(email.trim());
+    const cleanEmail = email.trim();
+    const existing = db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(cleanEmail);
     if (existing) {
       return res.status(409).json({ success: false, message: "An account with this email address already exists." });
     }
 
-    const insert = db.prepare(`
+    const contactStr = contactInfo || phone || "";
+
+    // 1. Doctor Registration Branch
+    if (role === "doctor") {
+      const certFile = req.file;
+      const certificateUrl = certFile ? `/uploads/${certFile.filename}` : "";
+      const certificateFilename = certFile ? certFile.originalname : "";
+      const expNum = parseInt(experience, 10) || 5;
+      const feesNum = parseFloat(fees) || 100;
+      const finalBio = bio || `Specialist in ${specialization} with verified clinical qualifications.`;
+
+      const defaultAvailability = JSON.stringify([
+        { day: "Monday", slots: ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM"] },
+        { day: "Wednesday", slots: ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM"] },
+        { day: "Friday", slots: ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM"] }
+      ]);
+
+      // Insert into doctors table with is_approved = 0 (Requires Admin Verification)
+      const insertDoc = db.prepare(`
+        INSERT INTO doctors (
+          name, email, phone, specialization, bio, experience, fees, rating, reviews_count, avatar, availability, is_approved, certificate_url, certificate_filename, license_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 5.0, 0, '👨‍⚕️', ?, 0, ?, ?, ?)
+      `);
+
+      const docResult = insertDoc.run(
+        name,
+        cleanEmail,
+        contactStr,
+        specialization,
+        finalBio,
+        expNum,
+        feesNum,
+        defaultAvailability,
+        certificateUrl,
+        certificateFilename,
+        licenseNumber
+      );
+      const doctorId = docResult.lastInsertRowid;
+
+      // Insert linked user account
+      const insertUser = db.prepare(`
+        INSERT INTO users (name, email, password, role, contact_info, doctor_id)
+        VALUES (?, ?, ?, 'doctor', ?, ?)
+      `);
+      const userResult = insertUser.run(name, cleanEmail, password, contactStr, doctorId);
+
+      // Record administrative audit log
+      try {
+        db.prepare(`
+          INSERT INTO audit_logs (actor_name, actor_role, actor_email, action_type, description, status)
+          VALUES (?, ?, ?, 'DOCTOR_REGISTERED', ?, 'warning')
+        `).run(
+          name,
+          "doctor",
+          cleanEmail,
+          `Dr. ${name} registered (${specialization}). Certification document '${certificateFilename || "None"}' and License '${licenseNumber || "N/A"}' pending Administrator verification.`,
+          "warning"
+        );
+      } catch (logErr) {
+        console.error("Audit log error:", logErr);
+      }
+
+      const token = `sushruta_token_${userResult.lastInsertRowid}_${Date.now()}`;
+      const docRecord = db.prepare("SELECT * FROM doctors WHERE id = ?").get(doctorId);
+
+      return res.status(201).json({
+        success: true,
+        message: "Doctor registration submitted successfully! Your original medical certification has been submitted to the Administrator for verification.",
+        token,
+        isApproved: false,
+        user: {
+          id: userResult.lastInsertRowid,
+          name,
+          email: cleanEmail,
+          role: "doctor",
+          contactInfo: contactStr,
+          doctorId
+        },
+        doctor: {
+          ...docRecord,
+          availability: JSON.parse(docRecord.availability)
+        }
+      });
+    }
+
+    // 2. Patient / Other User Registration Branch
+    const insertUser = db.prepare(`
       INSERT INTO users (name, email, password, role, contact_info)
       VALUES (?, ?, ?, ?, ?)
     `);
-    const info = insert.run(name, email.trim(), password, role, contactInfo || "");
+    const info = insertUser.run(name, cleanEmail, password, role, contactStr);
     const token = `sushruta_token_${info.lastInsertRowid}_${Date.now()}`;
+
+    // If registering as a patient, ensure patient health vitals profile exists
+    if (role === "patient") {
+      const existingPatient = db.prepare("SELECT id FROM patients WHERE LOWER(email) = LOWER(?)").get(cleanEmail);
+      if (!existingPatient) {
+        db.prepare(`
+          INSERT INTO patients (name, email, phone)
+          VALUES (?, ?, ?)
+        `).run(name, cleanEmail, contactStr);
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -1422,9 +1555,9 @@ app.post("/api/auth/register", (req, res) => {
       user: {
         id: info.lastInsertRowid,
         name,
-        email,
+        email: cleanEmail,
         role,
-        contactInfo
+        contactInfo: contactStr
       }
     });
   } catch (err) {

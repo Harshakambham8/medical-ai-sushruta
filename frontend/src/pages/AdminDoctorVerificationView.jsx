@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import API from "../services/api";
+import API, { API_BASE_URL } from "../services/api";
 
 export default function AdminDoctorVerificationView() {
   const [doctors, setDoctors] = useState([]);
@@ -8,6 +8,7 @@ export default function AdminDoctorVerificationView() {
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState(null);
   const [toastMessage, setToastMessage] = useState({ type: "", text: "" });
+  const [selectedCertDoctor, setSelectedCertDoctor] = useState(null);
 
   const fetchDoctors = async () => {
     setLoading(true);
@@ -41,6 +42,9 @@ export default function AdminDoctorVerificationView() {
       const res = await API.put(`/api/admin/doctors/${doc.id}/approve`);
       if (res.data.success) {
         showToast("success", `✓ Doctor credentials verified! ${doc.name} is now approved to practice.`);
+        if (selectedCertDoctor && selectedCertDoctor.id === doc.id) {
+          setSelectedCertDoctor((prev) => (prev ? { ...prev, is_approved: 1 } : null));
+        }
         fetchDoctors();
       }
     } catch (err) {
@@ -59,6 +63,9 @@ export default function AdminDoctorVerificationView() {
       const res = await API.put(`/api/admin/doctors/${doc.id}/reject`);
       if (res.data.success) {
         showToast("warning", `⚠ ${doc.name} license verification suspended.`);
+        if (selectedCertDoctor && selectedCertDoctor.id === doc.id) {
+          setSelectedCertDoctor((prev) => (prev ? { ...prev, is_approved: 0 } : null));
+        }
         fetchDoctors();
       }
     } catch (err) {
@@ -371,6 +378,71 @@ export default function AdminDoctorVerificationView() {
                   </div>
                 </div>
 
+                {/* Doctor Certification Document & License */}
+                <div
+                  style={{
+                    background: doc.certificate_url ? "rgba(102, 252, 241, 0.05)" : "rgba(255, 255, 255, 0.02)",
+                    border: doc.certificate_url ? "1px solid rgba(102, 252, 241, 0.3)" : "1px dashed var(--border-default)",
+                    borderRadius: "var(--radius)",
+                    padding: "10px 12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                      ORIGINAL MEDICAL CERTIFICATION
+                    </span>
+                    {doc.license_number && (
+                      <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--neon-purple)", fontWeight: 700 }}>
+                        LIC: {doc.license_number}
+                      </span>
+                    )}
+                  </div>
+
+                  {doc.certificate_url ? (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        <span style={{ fontSize: 16 }}>📜</span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-primary)",
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: 180,
+                          }}
+                        >
+                          {doc.certificate_filename || "Original_Certification.pdf"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCertDoctor(doc)}
+                        className="btn-cyber"
+                        style={{
+                          fontSize: 10,
+                          padding: "5px 12px",
+                          background: "rgba(102, 252, 241, 0.15)",
+                          border: "1px solid var(--neon-cyan)",
+                          color: "var(--neon-cyan)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span>👁️ INSPECT</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>⚠️</span>
+                      <span>No document uploaded (Legacy Demo)</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Admin Verification Action Buttons */}
                 <div style={{ display: "flex", gap: 10, paddingTop: 12, borderTop: "1px solid var(--border-default)" }}>
                   {!isApproved ? (
@@ -412,6 +484,249 @@ export default function AdminDoctorVerificationView() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* CERTIFICATION INSPECTION MODAL */}
+      {selectedCertDoctor && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.88)",
+            backdropFilter: "blur(12px)",
+            zIndex: 200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            animation: "fade-in 0.2s ease-out",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedCertDoctor(null);
+          }}
+        >
+          <div
+            className="cyber-card"
+            style={{
+              width: "100%",
+              maxWidth: 900,
+              maxHeight: "92vh",
+              display: "flex",
+              flexDirection: "column",
+              padding: 24,
+              boxShadow: "var(--glow-cyan)",
+              border: "1px solid var(--neon-cyan)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingBottom: 16,
+                borderBottom: "1px solid var(--border-default)",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 28 }}>📜</span>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h3 style={{ margin: 0, fontSize: 17, color: "var(--text-primary)" }}>
+                      Original Medical Certification — {selectedCertDoctor.name}
+                    </h3>
+                    <span className={`status-badge ${selectedCertDoctor.is_approved ? "optimal" : "attention"}`}>
+                      {selectedCertDoctor.is_approved ? "✓ APPROVED" : "⏳ PENDING REVIEW"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
+                    Specialty: {selectedCertDoctor.specialization} • License No: {selectedCertDoctor.license_number || "Not specified"} • ID: #DOC-{String(selectedCertDoctor.id).padStart(4, "0")}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedCertDoctor(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  fontSize: 20,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Document Viewer Body */}
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 460, display: "flex", flexDirection: "column" }}>
+              {selectedCertDoctor.certificate_url ? (
+                (() => {
+                  const certUrl = selectedCertDoctor.certificate_url.startsWith("http")
+                    ? selectedCertDoctor.certificate_url
+                    : `${API_BASE_URL}${selectedCertDoctor.certificate_url}`;
+                  const isPdf = selectedCertDoctor.certificate_url.toLowerCase().endsWith(".pdf") ||
+                    (selectedCertDoctor.certificate_filename && selectedCertDoctor.certificate_filename.toLowerCase().endsWith(".pdf"));
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 10 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          background: "var(--bg-input)",
+                          padding: "8px 12px",
+                          borderRadius: "var(--radius)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                          <span>📄</span>
+                          <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                            {selectedCertDoctor.certificate_filename || "Doctor_Certification.pdf"}
+                          </span>
+                        </div>
+
+                        <a
+                          href={certUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          download
+                          style={{
+                            fontSize: 11,
+                            color: "var(--neon-cyan)",
+                            textDecoration: "none",
+                            fontFamily: "var(--font-mono)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <span>🔗 Open in Full Window / Download</span>
+                        </a>
+                      </div>
+
+                      <div
+                        style={{
+                          flex: 1,
+                          minHeight: 480,
+                          background: "#111",
+                          borderRadius: "var(--radius)",
+                          overflow: "hidden",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "1px solid var(--border-default)",
+                        }}
+                      >
+                        {isPdf ? (
+                          <iframe
+                            src={certUrl}
+                            title="Original Medical Certification"
+                            style={{ width: "100%", height: 500, border: "none", background: "#fff" }}
+                          />
+                        ) : (
+                          <img
+                            src={certUrl}
+                            alt="Doctor Certification"
+                            style={{
+                              maxWidth: "100%",
+                              maxHeight: 500,
+                              objectFit: "contain",
+                              borderRadius: 4,
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>
+                  <div style={{ fontSize: 36, marginBottom: 10 }}>⚠️</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+                    No Certificate Document Attached
+                  </div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>
+                    This physician profile was created prior to certificate upload enforcement or is a seeded demo profile.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingTop: 16,
+                borderTop: "1px solid var(--border-default)",
+                marginTop: 16,
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                ADMINISTRATIVE VERIFICATION DECISION:
+              </div>
+
+              <div style={{ display: "flex", gap: 10 }}>
+                {!selectedCertDoctor.is_approved ? (
+                  <button
+                    onClick={() => handleApprove(selectedCertDoctor)}
+                    disabled={actionLoading === selectedCertDoctor.id}
+                    className="btn-cyber"
+                    style={{
+                      fontSize: 11,
+                      padding: "9px 18px",
+                      background: "rgba(0, 255, 135, 0.2)",
+                      border: "1px solid var(--neon-green)",
+                      color: "var(--neon-green)",
+                    }}
+                  >
+                    <span>{actionLoading === selectedCertDoctor.id ? "Approving..." : "✓ VERIFY CREDENTIALS & APPROVE DOCTOR"}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleReject(selectedCertDoctor)}
+                    disabled={actionLoading === selectedCertDoctor.id}
+                    className="btn-cyber"
+                    style={{
+                      fontSize: 11,
+                      padding: "9px 18px",
+                      background: "rgba(255, 0, 64, 0.15)",
+                      border: "1px solid var(--neon-red)",
+                      color: "var(--neon-red)",
+                    }}
+                  >
+                    <span>{actionLoading === selectedCertDoctor.id ? "Suspending..." : "✕ SUSPEND / REJECT PRIVILEGES"}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedCertDoctor(null)}
+                  style={{
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-secondary)",
+                    padding: "9px 16px",
+                    borderRadius: "var(--radius)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

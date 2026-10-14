@@ -107,9 +107,11 @@ export default function BookDoctorView() {
 
       // Resolve doctor profile for doctor view
       const loggedDoctor =
-        docs.find((d) => d.id === user?.doctorId || (user?.email && d.email && d.email.toLowerCase() === user.email.toLowerCase())) ||
-        docs.find((d) => d.name.toLowerCase().includes("aris")) ||
-        docs[0];
+        (authDoctor && (authDoctor.id === user?.doctorId || (user?.email && authDoctor.email && authDoctor.email.toLowerCase() === user.email.toLowerCase())))
+          ? authDoctor
+          : docs.find((d) => d.id === user?.doctorId || (user?.email && d.email && d.email.toLowerCase() === user.email.toLowerCase())) ||
+            docs.find((d) => d.name.toLowerCase().includes("aris")) ||
+            docs[0];
 
       if (loggedDoctor) {
         setActiveDoctorProfile(loggedDoctor);
@@ -775,6 +777,32 @@ export default function BookDoctorView() {
       {/* ============================================================ */}
       {viewMode === "doctor" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Unverified / Pending Notice */}
+          {activeDoctorProfile && !activeDoctorProfile.is_approved && (
+            <div
+              className="cyber-card"
+              style={{
+                padding: "16px 20px",
+                background: "rgba(255, 170, 0, 0.12)",
+                border: "1px solid #ffaa00",
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+              }}
+            >
+              <span style={{ fontSize: 28 }}>⏳</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#ffaa00" }}>
+                  Practice Privileges Pending Administrator Verification
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                  Your physician credentials and original certification document (<strong>{activeDoctorProfile.certificate_filename || "Medical License"}</strong>) have been submitted to the Admin.
+                  Your public appointment booking schedule will become visible to patients once verified by the Administrator.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Doctor Info Banner */}
           <div
             className="cyber-card"

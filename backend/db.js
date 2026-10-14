@@ -78,6 +78,9 @@ db.exec(`
     avatar TEXT,
     availability TEXT, -- JSON array of { day: string, slots: string[] }
     is_approved INTEGER DEFAULT 1,
+    certificate_url TEXT,
+    certificate_filename TEXT,
+    license_number TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -139,6 +142,17 @@ try {
 } catch {}
 try {
   db.exec("ALTER TABLE users ADD COLUMN doctor_id INTEGER");
+} catch {}
+
+// Safe migrations for doctors table
+try {
+  db.exec("ALTER TABLE doctors ADD COLUMN certificate_url TEXT");
+} catch {}
+try {
+  db.exec("ALTER TABLE doctors ADD COLUMN certificate_filename TEXT");
+} catch {}
+try {
+  db.exec("ALTER TABLE doctors ADD COLUMN license_number TEXT");
 } catch {}
 
 // Ensure default patient profiles exist for each account
