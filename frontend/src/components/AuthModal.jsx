@@ -376,6 +376,54 @@ export default function AuthModal({ isOpen, onClose }) {
                   SWITCH
                 </span>
               </div>
+
+              {/* Patient: Elena Vasquez */}
+              <div
+                onClick={() => handleQuickSwitch({ id: 10, name: "Elena Vasquez", email: "elena.vasquez@gmail.com", role: "patient", contact_info: "+1 555-234-8901" })}
+                style={{
+                  background: "var(--bg-input)",
+                  border: "1px solid rgba(138, 43, 226, 0.3)",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  transition: "var(--transition)",
+                }}
+              >
+                <div>
+                  <strong style={{ color: "var(--neon-purple)", fontSize: 13 }}>👤 Elena Vasquez</strong>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>elena.vasquez@gmail.com • Hashimoto Thyroiditis</div>
+                </div>
+                <span className="status-badge" style={{ background: "rgba(138, 43, 226, 0.15)", color: "var(--neon-purple)", border: "1px solid var(--neon-purple)" }}>
+                  SWITCH
+                </span>
+              </div>
+
+              {/* Patient: Marcus Sterling */}
+              <div
+                onClick={() => handleQuickSwitch({ id: 11, name: "Marcus Sterling", email: "marcus.sterling@gmail.com", role: "patient", contact_info: "+1 555-345-6712" })}
+                style={{
+                  background: "var(--bg-input)",
+                  border: "1px solid rgba(255, 170, 0, 0.3)",
+                  borderRadius: "var(--radius)",
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  transition: "var(--transition)",
+                }}
+              >
+                <div>
+                  <strong style={{ color: "var(--neon-amber)", fontSize: 13 }}>👤 Marcus Sterling</strong>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>marcus.sterling@gmail.com • Type 2 Diabetes</div>
+                </div>
+                <span className="status-badge" style={{ background: "rgba(255, 170, 0, 0.15)", color: "var(--neon-amber)", border: "1px solid var(--neon-amber)" }}>
+                  SWITCH
+                </span>
+              </div>
             </div>
           </div>
         )}

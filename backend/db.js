@@ -154,6 +154,15 @@ const ensurePatient = (name, age, gender, blood_group, height, weight, email, ph
     `);
     insert.run(name, age, gender, blood_group, height, weight, email, phone, allergies, chronic_conditions, emergency_contact, primary_physician, heart_rate, blood_pressure, temperature, spo2);
   }
+
+  // Ensure a corresponding patient user account exists for seamless authentication & switching
+  const existingUser = db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(email);
+  if (!existingUser) {
+    db.prepare(`
+      INSERT INTO users (name, email, password, role, contact_info)
+      VALUES (?, ?, 'password123', 'patient', ?)
+    `).run(name, email, phone);
+  }
 };
 
 // 1. Alex Mercer
@@ -169,7 +178,7 @@ ensurePatient(
   "Penicillin, Shellfish",
   "Mild Hypertension, Seasonal Asthma",
   "Elena Mercer (Spouse) - +1 (555) 902-3341",
-  "Dr. Aris Thorne, MD (Cardiology)",
+  "Dr. Aris Long, MD (Cardiology)",
   "72 bpm",
   "120/80 mmHg",
   "98.6 °F",
@@ -214,6 +223,206 @@ ensurePatient(
   "115/75 mmHg",
   "98.6 °F",
   "99%"
+);
+
+// 4. Elena Vasquez
+ensurePatient(
+  "Elena Vasquez",
+  38,
+  "Female",
+  "AB+ (Positive)",
+  "168 cm",
+  "62 kg",
+  "elena.vasquez@gmail.com",
+  "+1 (555) 234-8901",
+  "Sulfa Drugs, Codeine",
+  "Hashimoto Thyroiditis, Chronic Migraines",
+  "Carlos Vasquez (Spouse) - +1 (555) 234-8902",
+  "Dr. Charles Brain, MD, PhD (Neurology)",
+  "74 bpm",
+  "118/76 mmHg",
+  "98.4 °F",
+  "99%"
+);
+
+// 5. Marcus Sterling
+ensurePatient(
+  "Marcus Sterling",
+  55,
+  "Male",
+  "O- (Negative)",
+  "185 cm",
+  "92 kg",
+  "marcus.sterling@gmail.com",
+  "+1 (555) 345-6712",
+  "Aspirin, NSAIDs",
+  "Type 2 Diabetes Mellitus, Stage 1 Hypertension",
+  "Diana Sterling (Spouse) - +1 (555) 345-6713",
+  "Dr. Jane Hart, MD (Cardiology)",
+  "82 bpm",
+  "138/88 mmHg",
+  "98.7 °F",
+  "97%"
+);
+
+// 6. Amina Al-Mansoor
+ensurePatient(
+  "Amina Al-Mansoor",
+  27,
+  "Female",
+  "A- (Negative)",
+  "162 cm",
+  "54 kg",
+  "amina.mansoor@gmail.com",
+  "+1 (555) 456-7823",
+  "Penicillin, Tree Nuts",
+  "Iron Deficiency Anemia, Dysmenorrhea",
+  "Tariq Al-Mansoor (Brother) - +1 (555) 456-7824",
+  "Dr. Alice Mother, MD (Gynecology)",
+  "76 bpm",
+  "110/70 mmHg",
+  "98.2 °F",
+  "99%"
+);
+
+// 7. Robert Chen
+ensurePatient(
+  "Robert Chen",
+  63,
+  "Male",
+  "B- (Negative)",
+  "172 cm",
+  "78 kg",
+  "robert.chen@gmail.com",
+  "+1 (555) 567-8934",
+  "Contrast Dye, Shellfish",
+  "Coronary Artery Disease, Hypercholesterolemia",
+  "Mei Chen (Spouse) - +1 (555) 567-8935",
+  "Dr. Jane Hart, MD (Cardiology)",
+  "66 bpm",
+  "128/82 mmHg",
+  "98.6 °F",
+  "98%"
+);
+
+// 8. Priya Patel
+ensurePatient(
+  "Priya Patel",
+  31,
+  "Female",
+  "O+ (Positive)",
+  "158 cm",
+  "58 kg",
+  "priya.patel@gmail.com",
+  "+1 (555) 678-9045",
+  "Amoxicillin",
+  "Polycystic Ovary Syndrome (PCOS), Generalized Anxiety",
+  "Arjun Patel (Spouse) - +1 (555) 678-9046",
+  "Dr. Sigmund Mind, MD (Psychiatry)",
+  "70 bpm",
+  "116/74 mmHg",
+  "98.6 °F",
+  "100%"
+);
+
+// 9. Lucas Gomez
+ensurePatient(
+  "Lucas Gomez",
+  48,
+  "Male",
+  "AB- (Negative)",
+  "176 cm",
+  "86 kg",
+  "lucas.gomez@gmail.com",
+  "+1 (555) 789-0156",
+  "Latex, Adhesive Tape",
+  "Degenerative Lumbar Disc Disease, Sciatica",
+  "Sofia Gomez (Sister) - +1 (555) 789-0157",
+  "Dr. Arthur Bone, MD (Orthopedics)",
+  "75 bpm",
+  "124/80 mmHg",
+  "98.5 °F",
+  "99%"
+);
+
+// 10. Chloe Dubois
+ensurePatient(
+  "Chloe Dubois",
+  22,
+  "Female",
+  "A+ (Positive)",
+  "170 cm",
+  "59 kg",
+  "chloe.dubois@gmail.com",
+  "+1 (555) 890-1267",
+  "None Known (NKDA)",
+  "Mild Atopic Eczema, Environmental Allergies",
+  "Claire Dubois (Mother) - +1 (555) 890-1268",
+  "Dr. Sarah Skinner, MD (Dermatology)",
+  "68 bpm",
+  "112/72 mmHg",
+  "98.4 °F",
+  "100%"
+);
+
+// 11. David Washington
+ensurePatient(
+  "David Washington",
+  71,
+  "Male",
+  "O+ (Positive)",
+  "180 cm",
+  "83 kg",
+  "david.washington@gmail.com",
+  "+1 (555) 901-2378",
+  "Ciprofloxacin, Cephalosporins",
+  "Chronic Kidney Disease Stage 3a, Hypertension",
+  "Grace Washington (Spouse) - +1 (555) 901-2379",
+  "Dr. Albert Medic, MD (General Medicine)",
+  "64 bpm",
+  "134/84 mmHg",
+  "98.1 °F",
+  "96%"
+);
+
+// 12. Hannah Schmidt
+ensurePatient(
+  "Hannah Schmidt",
+  8,
+  "Female",
+  "B+ (Positive)",
+  "128 cm",
+  "26 kg",
+  "hannah.schmidt@gmail.com",
+  "+1 (555) 012-3489",
+  "Peanut, Dairy",
+  "Pediatric Bronchial Asthma, Atopic Dermatitis",
+  "Greta Schmidt (Mother) - +1 (555) 012-3490",
+  "Dr. Bruce Child, MD (Pediatrics)",
+  "92 bpm",
+  "98/64 mmHg",
+  "98.6 °F",
+  "99%"
+);
+
+// 13. Kavita Reddy
+ensurePatient(
+  "Kavita Reddy",
+  45,
+  "Female",
+  "A+ (Positive)",
+  "164 cm",
+  "67 kg",
+  "kavita.reddy@gmail.com",
+  "+1 (555) 123-4590",
+  "Erythromycin",
+  "Metabolic Syndrome, Non-Alcoholic Fatty Liver (NAFLD)",
+  "Vikram Reddy (Spouse) - +1 (555) 123-4591",
+  "Dr. Albert Medic, MD (General Medicine)",
+  "78 bpm",
+  "126/82 mmHg",
+  "98.6 °F",
+  "98%"
 );
 
 // Insert default seed records if empty

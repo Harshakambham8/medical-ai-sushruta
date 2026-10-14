@@ -137,6 +137,125 @@ app.get("/api/patient", (req, res) => {
   }
 });
 
+// GET /api/patients - Retrieve all patients with search & limit support
+app.get("/api/patients", (req, res) => {
+  try {
+    const { search, limit = 50 } = req.query;
+    let query = "SELECT * FROM patients WHERE 1=1";
+    const params = [];
+
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      query += " AND (LOWER(name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?) OR LOWER(chronic_conditions) LIKE LOWER(?) OR phone LIKE ?)";
+      params.push(term, term, term, term);
+    }
+
+    query += " ORDER BY id ASC LIMIT ?";
+    params.push(parseInt(limit, 10) || 50);
+
+    const patients = db.prepare(query).all(...params);
+    res.json({ success: true, count: patients.length, data: patients });
+  } catch (err) {
+    console.error("Get all patients error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/patients/:id - Retrieve single patient by ID
+app.get("/api/patients/:id", (req, res) => {
+  try {
+    const patient = db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id);
+    if (!patient) return res.status(404).json({ success: false, error: "Patient not found" });
+    res.json({ success: true, data: patient });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/patients - Create a new patient profile
+app.post("/api/patients", (req, res) => {
+  try {
+    const {
+      name,
+      age = 35,
+      gender = "Male",
+      blood_group = "O+ (Positive)",
+      height = "175 cm",
+      weight = "70 kg",
+      email,
+      phone = "+1 (555) 000-0000",
+      allergies = "None Known",
+      chronic_conditions = "None Reported",
+      emergency_contact = "Primary Contact - +1 (555) 000-0000",
+      primary_physician = "Dr. Albert Medic, MD (General Medicine)",
+      heart_rate = "72 bpm",
+      blood_pressure = "120/80 mmHg",
+      temperature = "98.6 °F",
+      spo2 = "99%"
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: "Patient name is required" });
+    }
+
+    const patientEmail = (email && email.trim())
+      ? email.trim()
+      : `${name.toLowerCase().replace(/[^a-z0-9]/g, ".")}.${Date.now().toString(36)}@sushruta-ai.local`;
+
+    const existing = db.prepare("SELECT * FROM patients WHERE LOWER(email) = LOWER(?)").get(patientEmail);
+    if (existing) {
+      return res.status(409).json({ success: false, error: "Patient with this email already exists", patient: existing });
+    }
+
+    const insertStmt = db.prepare(`
+      INSERT INTO patients (
+        name, age, gender, blood_group, height, weight, email, phone,
+        allergies, chronic_conditions, emergency_contact, primary_physician,
+        heart_rate, blood_pressure, temperature, spo2
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertStmt.run(
+      name.trim(),
+      parseInt(age, 10) || 35,
+      gender,
+      blood_group,
+      height,
+      weight,
+      patientEmail,
+      phone,
+      allergies,
+      chronic_conditions,
+      emergency_contact,
+      primary_physician,
+      heart_rate,
+      blood_pressure,
+      temperature,
+      spo2
+    );
+
+    const created = db.prepare("SELECT * FROM patients WHERE LOWER(email) = LOWER(?)").get(patientEmail);
+
+    // Ensure a user account exists for authentication
+    const userExists = db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(patientEmail);
+    if (!userExists) {
+      db.prepare(`
+        INSERT INTO users (name, email, password, role, contact_info)
+        VALUES (?, ?, 'password123', 'patient', ?)
+      `).run(name.trim(), patientEmail, phone);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Patient registered successfully",
+      patient: created
+    });
+  } catch (err) {
+    console.error("Create patient error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // PUT /api/patient - Update patient details for active user account
 app.put("/api/patient", (req, res) => {
   try {

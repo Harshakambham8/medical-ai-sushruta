@@ -19,6 +19,7 @@ export default function DashboardView() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [logFilter, setLogFilter] = useState("all"); // 'all' | 'chats' | 'reports'
+  const [patientList, setPatientList] = useState([]);
 
   // Patient Edit Form State
   const [formData, setFormData] = useState({
@@ -69,6 +70,15 @@ export default function DashboardView() {
       console.error("Dashboard fetch error:", err);
     } finally {
       setLoading(false);
+    }
+
+    try {
+      const pRes = await API.get("/api/patients?limit=50");
+      if (pRes.data?.data) {
+        setPatientList(pRes.data.data);
+      }
+    } catch (pErr) {
+      console.warn("Could not load patient list:", pErr);
     }
   };
 
@@ -252,30 +262,111 @@ export default function DashboardView() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>SWITCH PATIENT:</span>
-                {[
-                  { name: "Alex Mercer", email: "alex.mercer@sushruta-ai.local", role: "patient", id: 1 },
-                  { name: "John Patient", email: "patient1@gmail.com", role: "patient", id: 2 },
-                  { name: "Sarah Patient", email: "patient2@gmail.com", role: "patient", id: 3 },
-                ].map((p) => (
-                  <button
-                    key={p.email}
-                    onClick={() => quickSwitch(p)}
-                    style={{
-                      background: patient.email === p.email ? "var(--neon-cyan)" : "var(--bg-input)",
-                      color: patient.email === p.email ? "#030816" : "var(--text-primary)",
-                      border: "1px solid var(--border-default)",
-                      borderRadius: "var(--radius)",
-                      padding: "4px 10px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {p.name.split(" ")[0]}
-                  </button>
-                ))}
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                  SWITCH PATIENT ({patientList.length || 13}):
+                </span>
+                <select
+                  value={patient.email}
+                  onChange={(e) => {
+                    const found = (patientList.length > 0 ? patientList : (data?.allPatients || [])).find(
+                      (p) => p.email === e.target.value
+                    );
+                    if (found) quickSwitch({ ...found, role: "patient" });
+                  }}
+                  style={{
+                    background: "var(--bg-input)",
+                    color: "var(--neon-cyan)",
+                    border: "1px solid var(--neon-cyan)",
+                    borderRadius: "var(--radius)",
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-mono)",
+                    outline: "none",
+                  }}
+                >
+                  {(patientList.length > 0 ? patientList : (data?.allPatients || [])).map((p) => (
+                    <option key={p.email} value={p.email} style={{ background: "#0a1128", color: "#fff" }}>
+                      #{p.id} {p.name} ({p.age}y {p.gender}) — {p.chronic_conditions?.slice(0, 24)}...
+                    </option>
+                  ))}
+                </select>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 640 }}>
+                  {(patientList.length > 0 ? patientList : (data?.allPatients || [])).slice(0, 6).map((p) => (
+                    <button
+                      key={p.email}
+                      type="button"
+                      onClick={() => quickSwitch({ ...p, role: "patient" })}
+                      style={{
+                        background: patient.email === p.email ? "var(--neon-cyan)" : "var(--bg-input)",
+                        color: patient.email === p.email ? "#030816" : "var(--text-primary)",
+                        border: "1px solid var(--border-default)",
+                        borderRadius: "var(--radius)",
+                        padding: "3px 8px",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                      title={`${p.name} (${p.email})`}
+                    >
+                      {p.name.split(" ")[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Patient Selector for Non-Admin view so user can test any of the 13 patients */}
+          {user?.role !== "admin" && patientList.length > 0 && (
+            <div
+              className="cyber-card"
+              style={{
+                padding: "10px 16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 10,
+                border: "1px solid rgba(102, 252, 241, 0.25)",
+                background: "rgba(10, 25, 47, 0.4)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 16 }}>👥</span>
+                <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                  ACTIVE RECORD: <strong style={{ color: "var(--neon-cyan)" }}>{patient.name}</strong> ({patient.email})
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                  SWITCH PATIENT ({patientList.length}):
+                </span>
+                <select
+                  value={patient.email}
+                  onChange={(e) => {
+                    const found = patientList.find((p) => p.email === e.target.value);
+                    if (found) quickSwitch({ ...found, role: "patient" });
+                  }}
+                  style={{
+                    background: "var(--bg-input)",
+                    color: "var(--neon-cyan)",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: "var(--radius)",
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontFamily: "var(--font-mono)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {patientList.map((p) => (
+                    <option key={p.email} value={p.email} style={{ background: "#0a1128", color: "#fff" }}>
+                      #{p.id} {p.name} ({p.age}y, {p.blood_group}) — {p.chronic_conditions?.slice(0, 26)}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
