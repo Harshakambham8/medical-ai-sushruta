@@ -105,24 +105,24 @@ export default function BookDoctorView() {
       setDoctors(docs);
       setAppointments(appts);
 
-      // Resolve doctor profile for doctor view
-      const loggedDoctor =
-        (authDoctor && (authDoctor.id === user?.doctorId || (user?.email && authDoctor.email && authDoctor.email.toLowerCase() === user.email.toLowerCase())))
-          ? authDoctor
-          : docs.find((d) => d.id === user?.doctorId || (user?.email && d.email && d.email.toLowerCase() === user.email.toLowerCase())) ||
-            docs.find((d) => d.name.toLowerCase().includes("aris")) ||
-            docs[0];
+      // Resolve full doctor profile for doctor view from the complete doctors directory
+      const matchedDoctor = docs.find((d) =>
+        (user?.doctorId && d.id === user.doctorId) ||
+        (authDoctor?.id && d.id === authDoctor.id) ||
+        (user?.email && d.email && d.email.toLowerCase() === user.email.toLowerCase()) ||
+        (authDoctor?.email && d.email && d.email.toLowerCase() === authDoctor.email.toLowerCase())
+      ) || docs[0];
 
-      if (loggedDoctor) {
-        setActiveDoctorProfile(loggedDoctor);
+      if (matchedDoctor) {
+        setActiveDoctorProfile(matchedDoctor);
         let avail = [];
         try {
-          avail = typeof loggedDoctor.availability === "string" ? JSON.parse(loggedDoctor.availability) : (loggedDoctor.availability || []);
-        } catch {}
+          avail = typeof matchedDoctor.availability === "string" ? JSON.parse(matchedDoctor.availability) : (matchedDoctor.availability || []);
+        } catch { }
         setScheduleDays(avail.map((a) => a.day) || ["Monday", "Wednesday", "Friday"]);
-        setScheduleFees(String(loggedDoctor.fees || 120));
-        setScheduleBio(loggedDoctor.bio || "");
-        setSchedulePhone(loggedDoctor.phone || "");
+        setScheduleFees(String(matchedDoctor.fees || 120));
+        setScheduleBio(matchedDoctor.bio || "");
+        setSchedulePhone(matchedDoctor.phone || "");
       }
     } catch (err) {
       console.error("Failed to load doctor scheduling data:", err);
@@ -133,7 +133,7 @@ export default function BookDoctorView() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user, authDoctor]);
 
   // Fetch available slots dynamically when doctor or date changes
   const fetchAvailableSlots = async (docId, dateStr) => {
@@ -561,7 +561,7 @@ export default function BookDoctorView() {
                     let avail = [];
                     try {
                       avail = typeof doc.availability === "string" ? JSON.parse(doc.availability) : (doc.availability || []);
-                    } catch {}
+                    } catch { }
                     const availDays = avail.map((a) => a.day).join(", ");
 
                     return (
@@ -1290,18 +1290,18 @@ export default function BookDoctorView() {
                               background: isSelected
                                 ? "var(--neon-cyan)"
                                 : isBooked
-                                ? "rgba(255, 255, 255, 0.04)"
-                                : "var(--bg-input)",
+                                  ? "rgba(255, 255, 255, 0.04)"
+                                  : "var(--bg-input)",
                               color: isSelected
                                 ? "#0B0C10"
                                 : isBooked
-                                ? "var(--text-muted)"
-                                : "var(--text-primary)",
+                                  ? "var(--text-muted)"
+                                  : "var(--text-primary)",
                               border: isSelected
                                 ? "1px solid var(--neon-cyan)"
                                 : isBooked
-                                ? "1px solid rgba(255, 255, 255, 0.05)"
-                                : "1px solid var(--border-default)",
+                                  ? "1px solid rgba(255, 255, 255, 0.05)"
+                                  : "1px solid var(--border-default)",
                               borderRadius: "var(--radius)",
                               padding: "10px 6px",
                               fontSize: 11,

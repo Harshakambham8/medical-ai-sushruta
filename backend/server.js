@@ -6,7 +6,7 @@ import multer from "multer";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import db from "./db.js";
-import { processChatQuery, analyzeReportContent } from "./aiEngine.js";
+import { processChatQuery, analyzeReportContent, getChatEngineMetrics } from "./aiEngine.js";
 import { evaluateSymptomsWithGroq } from "./groqService.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -451,6 +451,17 @@ app.post("/api/chat", async (req, res) => {
   } catch (err) {
     console.error("Chat error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/chat/stats — Return metrics on health-related words and sentences in chat engine
+app.get("/api/chat/stats", (req, res) => {
+  try {
+    const stats = getChatEngineMetrics();
+    res.json(stats);
+  } catch (err) {
+    console.error("Chat stats error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1176,9 +1187,9 @@ app.get("/api/appointments/available-slots", (req, res) => {
       availability = typeof doctor.availability === "string" ? JSON.parse(doctor.availability) : (doctor.availability || []);
     } catch {}
 
-    const d = new Date(date);
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const dayName = dayNames[d.getUTCDay() !== undefined ? d.getDay() : 0];
+    const [y, m, dt] = date.split("-").map(Number);
+    const dayName = dayNames[new Date(y, m - 1, dt).getDay()];
 
     const daySchedule = availability.find((a) => (a.day || "").toLowerCase() === dayName.toLowerCase());
     const defaultSlots = ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "03:00 PM", "04:00 PM"];
